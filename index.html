@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>motion-lab — Animation Effects Library</title>
+  <link rel="stylesheet" href="./gallery.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">
+        <span class="brand-dot" aria-hidden="true"></span>
+        <span class="brand-name">motion-lab</span>
+      </div>
+      <div class="topbar-meta" id="effect-count">0 effects</div>
+    </div>
+  </header>
+
+  <main class="container">
+    <section class="intro">
+      <h1>Animation Effects Library</h1>
+      <p>独立、零依赖的交互动画与 WebGL 实验合集，每个效果均可单独打开或直接复用。</p>
+    </section>
+
+    <section class="grid" id="effects-grid" aria-label="Effects Gallery"></section>
+  </main>
+
+  <script src="./registry.js"></script>
+  <script>
+    const effects = window.MOTION_LAB_EFFECTS || [];
+    const grid = document.getElementById("effects-grid");
+    const countEl = document.getElementById("effect-count");
+
+    countEl.textContent = `${effects.length} ${effects.length === 1 ? "effect" : "effects"}`;
+
+    effects.forEach((item) => {
+      const card = document.createElement("article");
+      card.className = "card";
+      card.style.setProperty("--accent", item.accent || "#52cc86");
+
+      card.innerHTML = `
+        <div class="card-preview">
+          <iframe
+            src="${item.path}"
+            title="${item.title}"
+            loading="lazy"
+            tabindex="-1"
+          ></iframe>
+          <a class="card-open" href="${item.path}" title="全屏打开 ${item.title}">
+            全屏体验 &rarr;
+          </a>
+        </div>
+        <div class="card-body">
+          <div class="card-head">
+            <h2><a href="${item.path}">${item.title}</a></h2>
+            <span class="card-tech">${item.tech}</span>
+          </div>
+          <p class="card-desc">${item.subtitle}</p>
+          <div class="card-tags">
+            ${(item.tags || []).map((t) => `<span class="tag">${t}</span>`).join("")}
+          </div>
+        </div>
+      `;
+
+      grid.appendChild(card);
+    });
+  </script>
+</body>
+</html>
