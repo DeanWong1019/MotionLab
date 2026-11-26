@@ -10,6 +10,7 @@ window.MOTION_LAB_EFFECTS = [
     tech: "WebGL 1 / GLSL",
     tags: ["WebGL", "Particles", "Interactive", "3D"],
     path: "./effects/particle-orb/",
+    files: ["index.html", "style.css", "orb.js"],
     accent: "#52cc86",
     createdAt: "2026-11-25",
   },

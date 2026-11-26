@@ -3,15 +3,14 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>motion-lab — Animation Effects Library</title>
-  <link rel="stylesheet" href="./gallery.css" />
+  <title>MotionLab — Animation Effects Library</title>
+  <link rel="stylesheet" href="./gallery.css?v=3" />
 </head>
 <body>
   <header class="topbar">
     <div class="topbar-inner">
       <div class="brand">
-        <span class="brand-dot" aria-hidden="true"></span>
-        <span class="brand-name">motion-lab</span>
+        <span class="brand-name">MotionLab</span>
       </div>
       <div class="topbar-meta" id="effect-count">0 effects</div>
     </div>
@@ -20,21 +19,232 @@
   <main class="container">
     <section class="intro">
       <h1>Animation Effects Library</h1>
-      <p>独立、零依赖的交互动画与 WebGL 实验合集，每个效果均可单独打开或直接复用。</p>
+      <p>独立、可复用的前端动效与交互实验合集，涵盖 CSS、SVG、Canvas、WebGL 等视觉效果。</p>
     </section>
 
     <section class="grid" id="effects-grid" aria-label="Effects Gallery"></section>
   </main>
 
-  <script src="./registry.js"></script>
+  <!-- Fullscreen viewer overlay -->
+  <div class="viewer" id="viewer" aria-hidden="true">
+    <div class="viewer-bar">
+      <button type="button" class="viewer-btn" id="viewer-close">&larr; 返回画廊</button>
+      <span class="viewer-title" id="viewer-title"></span>
+      <div class="viewer-bar-actions">
+        <button type="button" class="viewer-btn" id="viewer-code-btn">&lt;/&gt; 代码</button>
+        <a class="viewer-btn" id="viewer-standalone" href="#" target="_blank" rel="noopener">独立页面 &nearr;</a>
+      </div>
+    </div>
+    <iframe class="viewer-frame" id="viewer-frame" title="Fullscreen Effect Preview"></iframe>
+  </div>
+
+  <!-- Slide-out source code drawer -->
+  <div class="code-backdrop" id="code-backdrop" aria-hidden="true"></div>
+  <aside class="code-drawer" id="code-drawer" aria-hidden="true">
+    <div class="code-drawer-header">
+      <div class="code-drawer-heading">
+        <span class="code-drawer-title" id="code-drawer-title">Source Code</span>
+        <span class="code-drawer-path" id="code-drawer-path"></span>
+      </div>
+      <button type="button" class="code-close-btn" id="code-close-btn" aria-label="关闭代码面板">&times;</button>
+    </div>
+
+    <div class="code-toolbar">
+      <div class="code-tabs" id="code-tabs" role="tablist"></div>
+      <button type="button" class="code-copy-btn" id="code-copy-btn">复制代码</button>
+    </div>
+
+    <div class="code-body">
+      <pre class="code-pre"><code id="code-content">Loading...</code></pre>
+    </div>
+  </aside>
+
+  <script src="./registry.js?v=3"></script>
   <script>
     const effects = window.MOTION_LAB_EFFECTS || [];
     const grid = document.getElementById("effects-grid");
     const countEl = document.getElementById("effect-count");
 
+    // Fullscreen viewer elements
+    const viewer = document.getElementById("viewer");
+    const viewerFrame = document.getElementById("viewer-frame");
+    const viewerTitle = document.getElementById("viewer-title");
+    const viewerStandalone = document.getElementById("viewer-standalone");
+    const viewerClose = document.getElementById("viewer-close");
+    const viewerCodeBtn = document.getElementById("viewer-code-btn");
+
+    // Code drawer elements
+    const codeBackdrop = document.getElementById("code-backdrop");
+    const codeDrawer = document.getElementById("code-drawer");
+    const codeDrawerTitle = document.getElementById("code-drawer-title");
+    const codeDrawerPath = document.getElementById("code-drawer-path");
+    const codeTabs = document.getElementById("code-tabs");
+    const codeCopyBtn = document.getElementById("code-copy-btn");
+    const codeCloseBtn = document.getElementById("code-close-btn");
+    const codeContent = document.getElementById("code-content");
+
+    const fileCache = new Map();
+    let activeViewerItem = null;
+    let activeCodeItem = null;
+    let currentCodeText = "";
+    let copyTimer = null;
+
     countEl.textContent = `${effects.length} ${effects.length === 1 ? "effect" : "effects"}`;
 
+    function getEntryUrl(item) {
+      return item.path.endsWith("/") ? `${item.path}index.html` : item.path;
+    }
+
+    function getBaseDir(item) {
+      return item.path.endsWith("/") ? item.path : `${item.path}/`;
+    }
+
+    function openViewer(item) {
+      activeViewerItem = item;
+      const url = getEntryUrl(item);
+      viewerTitle.textContent = item.title;
+      viewerStandalone.href = url;
+      viewerFrame.src = url;
+      viewer.classList.add("is-open");
+      viewer.setAttribute("aria-hidden", "false");
+      document.body.style.overflow = "hidden";
+    }
+
+    function closeViewer() {
+      activeViewerItem = null;
+      viewer.classList.remove("is-open");
+      viewer.setAttribute("aria-hidden", "true");
+      viewerFrame.src = "about:blank";
+      if (!codeDrawer.classList.contains("is-open")) {
+        document.body.style.overflow = "";
+      }
+    }
+
+    async function loadSourceFile(item, filename) {
+      const base = getBaseDir(item);
+      const url = `${base}${filename}`;
+      codeDrawerPath.textContent = url.replace(/^\.\//, "");
+
+      // Highlight active tab
+      codeTabs.querySelectorAll(".code-tab").forEach((btn) => {
+        const isActive = btn.dataset.file === filename;
+        btn.classList.toggle("is-active", isActive);
+        btn.setAttribute("aria-selected", String(isActive));
+      });
+
+      if (fileCache.has(url)) {
+        currentCodeText = fileCache.get(url);
+        codeContent.textContent = currentCodeText;
+        return;
+      }
+
+      codeContent.textContent = "加载中...";
+      try {
+        const res = await fetch(url, { cache: "no-store" });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const text = await res.text();
+        fileCache.set(url, text);
+        currentCodeText = text;
+        codeContent.textContent = text;
+      } catch (err) {
+        currentCodeText = "";
+        codeContent.textContent = `无法读取源码文件 (${url})：${err.message}`;
+      }
+    }
+
+    function openCodeDrawer(item) {
+      activeCodeItem = item;
+      const files = item.files && item.files.length ? item.files : ["index.html"];
+      codeDrawerTitle.textContent = item.title;
+      codeDrawer.style.setProperty("--accent", item.accent || "#52cc86");
+
+      codeTabs.innerHTML = "";
+      files.forEach((file) => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "code-tab";
+        btn.role = "tab";
+        btn.dataset.file = file;
+        btn.textContent = file;
+        btn.addEventListener("click", () => loadSourceFile(item, file));
+        codeTabs.appendChild(btn);
+      });
+
+      codeBackdrop.classList.add("is-open");
+      codeBackdrop.setAttribute("aria-hidden", "false");
+      codeDrawer.classList.add("is-open");
+      codeDrawer.setAttribute("aria-hidden", "false");
+      document.body.style.overflow = "hidden";
+
+      loadSourceFile(item, files[0]);
+    }
+
+    function closeCodeDrawer() {
+      codeBackdrop.classList.remove("is-open");
+      codeBackdrop.setAttribute("aria-hidden", "true");
+      codeDrawer.classList.remove("is-open");
+      codeDrawer.setAttribute("aria-hidden", "true");
+      if (!viewer.classList.contains("is-open")) {
+        document.body.style.overflow = "";
+      }
+    }
+
+    async function copyText(text) {
+      if (!text) return false;
+      if (navigator.clipboard && window.isSecureContext) {
+        try {
+          await navigator.clipboard.writeText(text);
+          return true;
+        } catch (_) {
+          // Fall through to execCommand fallback
+        }
+      }
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.setAttribute("readonly", "");
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      let ok = false;
+      try {
+        ok = document.execCommand("copy");
+      } catch (_) {
+        ok = false;
+      }
+      document.body.removeChild(ta);
+      return ok;
+    }
+
+    codeCopyBtn.addEventListener("click", async () => {
+      const ok = await copyText(currentCodeText);
+      clearTimeout(copyTimer);
+      codeCopyBtn.textContent = ok ? "已复制 ✓" : "复制失败";
+      codeCopyBtn.classList.toggle("is-copied", ok);
+      copyTimer = setTimeout(() => {
+        codeCopyBtn.textContent = "复制代码";
+        codeCopyBtn.classList.remove("is-copied");
+      }, 1800);
+    });
+
+    viewerClose.addEventListener("click", closeViewer);
+    viewerCodeBtn.addEventListener("click", () => {
+      if (activeViewerItem) openCodeDrawer(activeViewerItem);
+    });
+    codeCloseBtn.addEventListener("click", closeCodeDrawer);
+    codeBackdrop.addEventListener("click", closeCodeDrawer);
+
+    window.addEventListener("keydown", (e) => {
+      if (e.key !== "Escape") return;
+      if (codeDrawer.classList.contains("is-open")) {
+        closeCodeDrawer();
+      } else if (viewer.classList.contains("is-open")) {
+        closeViewer();
+      }
+    });
+
     effects.forEach((item) => {
+      const url = getEntryUrl(item);
       const card = document.createElement("article");
       card.className = "card";
       card.style.setProperty("--accent", item.accent || "#52cc86");
@@ -42,18 +252,23 @@
       card.innerHTML = `
         <div class="card-preview">
           <iframe
-            src="${item.path}"
+            src="${url}"
             title="${item.title}"
             loading="lazy"
             tabindex="-1"
           ></iframe>
-          <a class="card-open" href="${item.path}" title="全屏打开 ${item.title}">
-            全屏体验 &rarr;
-          </a>
+          <div class="card-actions">
+            <button type="button" class="card-open card-code-btn" title="查看 ${item.title} 源码">
+              &lt;/&gt; 代码
+            </button>
+            <button type="button" class="card-open card-fullscreen-btn" title="全屏体验 ${item.title}">
+              全屏体验 &rarr;
+            </button>
+          </div>
         </div>
         <div class="card-body">
           <div class="card-head">
-            <h2><a href="${item.path}">${item.title}</a></h2>
+            <h2><a href="${url}">${item.title}</a></h2>
             <span class="card-tech">${item.tech}</span>
           </div>
           <p class="card-desc">${item.subtitle}</p>
@@ -62,6 +277,18 @@
           </div>
         </div>
       `;
+
+      card.querySelector(".card-code-btn").addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        openCodeDrawer(item);
+      });
+
+      card.querySelector(".card-fullscreen-btn").addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        openViewer(item);
+      });
 
       grid.appendChild(card);
     });

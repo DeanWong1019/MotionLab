@@ -1,6 +1,6 @@
-# motion-lab
+# MotionLab
 
-A curated collection of standalone WebGL, Canvas, SVG, and CSS animation experiments.
+A curated collection of standalone frontend animation & interaction experiments (CSS, SVG, Canvas, WebGL, and more).
 
 ## Preview Locally
 
